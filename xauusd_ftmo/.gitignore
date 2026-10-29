@@ -1,0 +1,6 @@
+data/
+models/
+reports/
+live_state.json
+__pycache__/
+*.pyc

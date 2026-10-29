@@ -1,0 +1,63 @@
+# XAUUSD / FTMO configuration. All money values are in account currency (USD).
+symbol: XAUUSD
+timeframe: H1
+
+account:
+  initial_balance: 100000
+
+# FTMO hard rules (Standard 2-step challenge). Breaching either loss limit fails the account.
+ftmo:
+  max_daily_loss_pct: 5.0      # equity may not drop below day-start level minus 5% of initial balance
+  max_total_loss_pct: 10.0     # equity may not drop below 90% of initial balance
+  profit_target_pct: 10.0      # 10% phase 1, set 5.0 for phase 2 (verification)
+  min_trading_days: 4
+  flatten_before_weekend: true # Standard accounts: avoid weekend gap risk
+  friday_flatten_hour: 21      # broker/server time; close everything at/after this hour on Friday
+
+# Our own, stricter limits that sit inside FTMO's limits.
+risk:
+  risk_per_trade_pct: 0.5      # % of initial balance risked between entry and stop-loss
+  internal_daily_stop_pct: 2.5 # stop opening trades for the day after losing this much
+  internal_total_stop_pct: 7.0 # stop trading entirely below this drawdown
+  safety_buffer_pct: 0.5       # never size a trade whose stop would come within this of an FTMO limit
+  max_trades_per_day: 3
+  max_lots: 20.0
+  reduce_risk_after_losses: 2  # halve risk after N consecutive losses (0 disables)
+
+# XAUUSD contract specs and costs (check the symbol spec in your FTMO MT5 terminal).
+costs:
+  contract_size: 100           # 1 lot = 100 oz
+  lot_step: 0.01
+  min_lot: 0.01
+  spread: 0.25                 # USD per oz, used when data has no spread column
+  slippage: 0.05               # USD per oz, applied adversely on entries and stop exits
+  commission_per_lot: 7.0      # USD round turn per lot (conservative; set to your actual)
+
+# Trade structure / labelling (triple barrier, distances in ATR multiples).
+labels:
+  atr_period: 14
+  tp_atr: 2.0
+  sl_atr: 1.0
+  horizon_bars: 24             # time exit after this many bars
+
+model:
+  prob_threshold: 0.45         # minimum P(TP before SL) to take a trade
+  min_edge: 0.05               # p_long must exceed p_short by this much (and vice versa)
+  train_bars: 12000            # ~2 years of H1 bars per training window
+  test_bars: 500               # retrain roughly monthly
+  expanding_window: false
+  params:
+    max_iter: 300
+    learning_rate: 0.03
+    max_leaf_nodes: 15
+    min_samples_leaf: 200
+    l2_regularization: 1.0
+    random_state: 7
+
+session:
+  # Only open trades during these broker-time hours (inclusive start, exclusive end).
+  trade_hours: [8, 21]
+
+challenge:
+  max_calendar_days: 60        # stop a simulated challenge after this many days (FTMO has no limit; this caps the sim)
+  start_every_days: 7          # start a new simulated challenge every N days of the out-of-sample period
