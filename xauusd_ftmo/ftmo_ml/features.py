@@ -4,6 +4,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from .patterns import flag_features
+
 
 def atr(df: pd.DataFrame, n: int = 14) -> pd.Series:
     prev_close = df["close"].shift(1)
@@ -20,7 +22,7 @@ def rsi(close: pd.Series, n: int = 14) -> pd.Series:
     return 100 - 100 / (1 + up / down.replace(0, np.nan))
 
 
-def build_features(df: pd.DataFrame, atr_period: int = 14) -> pd.DataFrame:
+def build_features(df: pd.DataFrame, atr_period: int = 14, flag_params: dict | None = None) -> pd.DataFrame:
     c, h, l, o = df["close"], df["high"], df["low"], df["open"]
     a = atr(df, atr_period)
     logc = np.log(c)
@@ -82,4 +84,5 @@ def build_features(df: pd.DataFrame, atr_period: int = 14) -> pd.DataFrame:
     f["hour_cos"] = np.cos(2 * np.pi * hour / 24)
     f["dow"] = df.index.dayofweek
 
+    f = f.join(flag_features(df, a, flag_params))
     return f.replace([np.inf, -np.inf], np.nan).astype("float32")

@@ -54,6 +54,19 @@ model:
     l2_regularization: 1.0
     random_state: 7
 
+# Bull/bear flag detection. Flag measurements are always given to the model as features;
+# trade_only_flags additionally restricts entries to flag breakouts that agree with the model.
+patterns:
+  trade_only_flags: false
+  flags:
+    pole_bars: 10              # length of the impulse ("pole")
+    flag_bars: [5, 10]         # consolidation lengths to scan
+    min_pole_atr: 3.0          # pole must move at least 3 ATR
+    min_pole_efficiency: 0.5   # how straight the pole is (1.0 = every bar in one direction)
+    max_retrace: 0.5           # flag gives back at most 50% of the pole
+    max_tightness: 0.6         # flag range at most 60% of pole height
+    max_drift_atr: 0.15        # flag drifts flat or against the pole
+
 session:
   # Only open trades during these broker-time hours (inclusive start, exclusive end).
   trade_hours: [8, 21]

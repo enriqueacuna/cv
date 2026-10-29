@@ -16,7 +16,8 @@ import pandas as pd
 
 from .data import clean
 from .features import atr, build_features
-from .model import DirectionalModel, signals_from_proba
+from .pipeline import flag_params
+from .model import DirectionalModel, apply_pattern_filter, signals_from_proba
 from .risk import FTMORiskManager
 
 log = logging.getLogger("ftmo_ml.live")
@@ -139,9 +140,10 @@ class LiveTrader:
     def on_new_bar(self, now: datetime, acct) -> None:
         cfg = self.cfg
         df = self.bars()
-        X = build_features(df, cfg.labels.atr_period).iloc[[-1]]
+        X = build_features(df, cfg.labels.atr_period, flag_params(cfg)).iloc[[-1]]
         proba = self.model.predict_proba(X)
-        sig = int(signals_from_proba(proba, cfg.model.prob_threshold, cfg.model.min_edge).iloc[-1])
+        sig = int(apply_pattern_filter(signals_from_proba(proba, cfg.model.prob_threshold, cfg.model.min_edge),
+                                       X, cfg).iloc[-1])
         a = float(atr(df, cfg.labels.atr_period).iloc[-1])
         log.info("bar %s p_long=%.3f p_short=%.3f signal=%d atr=%.2f equity=%.2f",
                  df.index[-1], proba.p_long.iloc[-1], proba.p_short.iloc[-1], sig, a, acct.equity)

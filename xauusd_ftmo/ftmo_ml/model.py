@@ -80,6 +80,15 @@ def signals_from_proba(proba: pd.DataFrame, threshold: float, min_edge: float) -
     return pd.Series(sig, index=proba.index, name="signal")
 
 
+def apply_pattern_filter(signals: pd.Series, X: pd.DataFrame, cfg) -> pd.Series:
+    """With patterns.trade_only_flags, keep a signal only on a flag breakout in the same direction."""
+    pat = getattr(cfg, "patterns", None)
+    if pat is None or not pat.trade_only_flags:
+        return signals
+    flag_dir = X["flag_breakout_dir"].reindex(signals.index).fillna(0)
+    return signals.where(signals == flag_dir, 0)
+
+
 def classification_report(proba: pd.DataFrame, labels: pd.DataFrame) -> dict:
     lab = labels.reindex(proba.index).dropna()
     p = proba.loc[lab.index]

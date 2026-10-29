@@ -11,7 +11,8 @@ import pandas as pd
 from .backtest import run_backtest, simulate_challenges
 from .config import load_config, to_dict
 from .data import fetch_mt5, load_csv, synthetic_gold
-from .model import DirectionalModel, classification_report, signals_from_proba, training_mask, walk_forward
+from .model import (DirectionalModel, apply_pattern_filter, classification_report, signals_from_proba,
+                    training_mask, walk_forward)
 from .pipeline import prepare
 
 
@@ -42,6 +43,19 @@ def cmd_train(args):
     print(f"trained on {int(mask.sum())} bars ending {X.index[mask][-1]}; saved {args.out}")
 
 
+def flag_report(X, y) -> dict:
+    """How often flag breakouts occur out-of-sample and how often their trade hit TP before SL."""
+    out = {}
+    for name, d in (("bull", 1), ("bear", -1)):
+        m = (X["flag_breakout_dir"] == d) & y.y_long.reindex(X.index).notna()
+        lab = y.loc[m[m].index, "y_long" if d == 1 else "y_short"]
+        out[f"{name}_flag_breakouts"] = int(m.sum())
+        out[f"{name}_flag_tp_rate"] = float(lab.mean()) if len(lab) else None
+    out["base_tp_rate_long"] = float(y.y_long.reindex(X.index).mean())
+    out["base_tp_rate_short"] = float(y.y_short.reindex(X.index).mean())
+    return out
+
+
 def cmd_backtest(args):
     cfg = load_config(args.config)
     out = Path(args.reports)
@@ -58,13 +72,14 @@ def cmd_backtest(args):
     # Threshold sensitivity: if only one magic threshold works, the edge is probably not real.
     sweep = []
     for thr in args.thresholds:
-        s = signals_from_proba(proba, thr, cfg.model.min_edge)
+        s = apply_pattern_filter(signals_from_proba(proba, thr, cfg.model.min_edge), X, cfg)
         r = run_backtest(oos, s, a, spread, cfg)
         sweep.append({"threshold": thr, **{k: r.stats.get(k) for k in
                       ("status", "return_pct", "max_drawdown_pct_of_initial", "n_trades", "win_rate_pct", "profit_factor")}})
     report["threshold_sweep"] = sweep
 
-    signals = signals_from_proba(proba, cfg.model.prob_threshold, cfg.model.min_edge)
+    signals = apply_pattern_filter(signals_from_proba(proba, cfg.model.prob_threshold, cfg.model.min_edge), X, cfg)
+    report["flags"] = flag_report(X.loc[proba.index], y)
     res = run_backtest(oos, signals, a, spread, cfg)
     report["backtest"] = res.stats
     ch_table, ch_summary = simulate_challenges(oos, signals, a, spread, cfg)

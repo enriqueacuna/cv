@@ -16,6 +16,7 @@ backtester, a Monte-Carlo-style FTMO challenge simulator, and a MetaTrader 5 liv
 |---|---|---|
 | Data | `data.py` | Loads MT5 "Export bars" CSVs or generic OHLC CSVs, or pulls history from a running MT5 terminal |
 | Features | `features.py` | ~45 causal features: multi-horizon returns in ATR units, volatility regime, RSI/MACD/EMA distances, Bollinger %b, range position, candle shape, tick-volume, previous-day levels, session/hour |
+| Flags | `patterns.py` | Bull/bear flag detector (strong straight pole → tight, shallow, flat-or-counter consolidation → breakout), scanned at several flag lengths. Gives the model both yes/no flags and the measurements (pole strength, tightness, retracement, drift, breakout distance) |
 | Labels | `labels.py` | Triple barrier that mirrors the real trade: enter next bar open, TP = 2×ATR, SL = 1×ATR, time exit after 24 bars, spread included, same-bar TP+SL counted as a loss |
 | Model | `model.py` | Two `HistGradientBoostingClassifier`s: P(long TP before SL) and P(short TP before SL). Trade only when P ≥ threshold *and* beats the other side by `min_edge` |
 | Validation | `model.walk_forward` | Rolling ~2-year training window, retrains every ~month, purges training rows whose label window overlaps the test block |
@@ -29,7 +30,7 @@ backtester, a Monte-Carlo-style FTMO challenge simulator, and a MetaTrader 5 liv
 ```bash
 cd xauusd_ftmo
 pip install -r requirements.txt
-python -m pytest -q tests            # 7 tests: no-lookahead, labels, sizing, FTMO breach, model sanity
+python -m pytest -q tests            # no-lookahead, labels, flags, sizing, FTMO breach, model sanity
 
 # 1. Get data. On Windows with MT5 logged in to FTMO:
 pip install MetaTrader5
@@ -67,6 +68,23 @@ a meaningful out-of-sample period.
 
 With TP 2R / SL 1R the break-even win rate is ~34% before costs. The model needs to pick trades
 clearly above that.
+
+## Bull and bear flags
+
+Flag features are always part of the model's inputs. Two ways to use them:
+
+1. **As features (default).** The model decides how much flags matter, alongside everything
+   else. Because the flag measurements are given to the model as numbers, it can learn things
+   like "tight flags after very straight poles work, deep pullbacks don't".
+2. **Flag-only trading.** Set `patterns.trade_only_flags: true`. The model still trains on every
+   bar, but a trade is only taken on a flag breakout that agrees with the model's direction. You
+   get far fewer trades. On H1 gold, expect a few per month at most, so passing a challenge takes
+   longer.
+
+`summary.json` → `flags` reports how many bull/bear flag breakouts occurred out-of-sample and how
+often their trade reached TP before SL, compared with the base rate. If flag breakouts don't beat
+the base rate on your data, flag-only trading won't help. Tune the definition under
+`patterns.flags` (pole length, minimum pole size, maximum retracement, and so on).
 
 ## Things to tune (config.yaml)
 

@@ -116,3 +116,38 @@ def test_walk_forward_finds_planted_edge_and_not_noise(cfg):
 
     X, y, _, _ = prepare(synthetic_gold(6000, seed=5), cfg)
     assert abs(classification_report(walk_forward(X, y, cfg), y)["long_auc"] - 0.5) < 0.05
+
+
+def flag_bars(direction=1):
+    """Flat base, 10-bar straight pole of +/-2 per bar, 6-bar tight pullback, then a breakout bar."""
+    closes = [2000.0] * 30
+    for _ in range(10):
+        closes.append(closes[-1] + 2 * direction)
+    top = closes[-1]
+    closes += [top - 0.6 * direction, top - 1.0 * direction, top - 0.8 * direction,
+               top - 1.2 * direction, top - 0.9 * direction, top - 1.1 * direction]
+    closes.append(top + 2.0 * direction)  # breakout
+    rows = [(c - 0.3 * direction if i else c, max(c, c - 0.3 * direction) + 0.2,
+             min(c, c - 0.3 * direction) - 0.2, c) for i, c in enumerate(closes)]
+    return bars(rows, start="2024-01-02 00:00")
+
+
+@pytest.mark.parametrize("direction", [1, -1])
+def test_flag_breakout_detected(direction):
+    df = flag_bars(direction)
+    f = build_features(df, atr_period=5, flag_params={"flag_bars": [5]})
+    assert f["flag_breakout_dir"].iloc[-1] == direction
+    assert f["flag_any"].iloc[-1] == direction
+    assert (f["flag_breakout_dir"].iloc[:-1] != direction).all()  # nothing fires before the breakout
+
+
+def test_pattern_filter_keeps_only_matching_breakouts(cfg):
+    from types import SimpleNamespace
+
+    from ftmo_ml.model import apply_pattern_filter
+
+    idx = pd.date_range("2024-01-02", periods=4, freq="h")
+    sig = pd.Series([1, -1, 1, -1], index=idx)
+    X = pd.DataFrame({"flag_breakout_dir": [1, 1, 0, -1]}, index=idx)
+    cfg.patterns = SimpleNamespace(trade_only_flags=True)
+    assert apply_pattern_filter(sig, X, cfg).tolist() == [1, 0, 0, -1]
